@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 环境与密钥（绝不提交）
+.env
+.env.local
+*.pem
+
+# 日志
+logs/
+*.log
+
+# 测试与工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+
+# Docker 运行产物
+docker-compose.override.yml

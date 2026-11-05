@@ -1,0 +1,25 @@
+# 汀宝宝 Agent 依赖清单（安装后用 `pip freeze` 生成锁定版本 requirements.lock.txt）
+# Python >= 3.12
+
+# Web 外壳
+fastapi
+uvicorn[standard]
+
+# 配置/校验
+pydantic-settings
+
+# 数据层（只读直连）
+motor
+
+# 业务 API 客户端（JWT 透传写操作）
+httpx
+
+# JWT 校验（与汀宝宝共享 secret）
+pyjwt
+
+# Agent 编排（M1 时安装并核对官方真实版本）
+agentscope
+
+# 测试
+pytest
+pytest-asyncio
