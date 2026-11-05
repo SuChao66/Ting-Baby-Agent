@@ -28,3 +28,6 @@ htmlcov/
 
 # Docker 运行产物
 docker-compose.override.yml
+
+#docs
+docs/*
