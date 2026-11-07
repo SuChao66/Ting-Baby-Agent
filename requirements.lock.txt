@@ -44,7 +44,6 @@ MarkupSafe==3.0.4
 mcp==2.3.0
 mcp-types==2.3.0
 mdurl==0.1.2
-motor==3.7.1
 multidict==7.2.1
 numpy==2.5.4
 openai==3.46.0

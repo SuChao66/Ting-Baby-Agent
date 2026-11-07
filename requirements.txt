@@ -8,8 +8,8 @@ uvicorn[standard]
 # 配置/校验
 pydantic-settings
 
-# 数据层（只读直连）
-motor
+# 数据层（只读直连；4.9+ 自带原生异步客户端 AsyncMongoClient）
+pymongo
 
 # 业务 API 客户端（JWT 透传写操作）
 httpx
