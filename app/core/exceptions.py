@@ -26,11 +26,24 @@ class BizException(Exception):
         self.code = code
         super().__init__(message)
 
+# 未登录异常
 class UnauthorizedException(BizException):
     """鉴权错误：HTTP 401 + body.code=401（对齐 backend res.status(401).json(...)）。"""
 
     def __init__(self, message: str = "未授权，请先登录"):
         super().__init__(message=message, code=ResponseCode.UNAUTHORIZED)
+
+# 禁止越权异常
+class ForbiddenException(BizException):
+    """ 权限不足：业务层拒绝（如访问非自己宝宝的记录）。HTTP 200 + body.code=403 """
+    def __init__(self, message: str="无权访问"):
+        super().__init__(message=message, code=ResponseCode.FORBIDDEN)
+
+# 未发现异常404
+class NotFoundException(BizException):
+    """ 未找到资源：HTTP 200 + body.code=404（对齐 backend res.status(404).json(...)）。"""
+    def __init__(self, message: str="资源不存在"):
+        super().__init__(message=message, code=ResponseCode.NOT_FOUND)
 
 # 自定义HTTP响应
 def _envelope(code: int, message: str, http_status: int) -> JSONResponse:

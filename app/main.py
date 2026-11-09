@@ -36,7 +36,7 @@ class ReuqestLogMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动：建 Motor 客户端（惰性，不联网）
-    init_mongo()
+    _ = init_mongo()
     logger.info("汀家 Agent 启动完成 env=%s", settings.app_env)
     yield
     # 关闭：释放连接池
