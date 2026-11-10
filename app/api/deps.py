@@ -23,3 +23,13 @@ async def get_current_user(cred: CredDep) -> TokenPayload:
         raise UnauthorizedException("请先登录")
     payload = decode_token(cred.credentials)
     return payload
+
+
+# 获取原始token，用于写记录
+async def get_raw_token(cred: CredDep) -> str:
+    """ 取原始 JWT 字符串（写工具透传给 Node API 用），与 get_current_user 平行。 """
+    if cred is None:
+        raise UnauthorizedException("请先登录")
+    return cred.credentials
+
+RawTokenDep = Annotated[str, Depends(get_raw_token)]

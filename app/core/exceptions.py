@@ -72,7 +72,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         # FastAPI 参数校验失败默认 422；对齐 backend：body.code=PARAM_ERROR(430)
-        logger.warning("参数校验失败 %s %s", request.method, request.url.path)
+        # 校验详情进日志（哪个字段/什么错），排查调试路由 422 不用猜
+        logger.warning("参数校验失败 %s %s -> %s",
+                       request.method, request.url.path, exc.errors())
         return _envelope(ResponseCode.PARAM_ERROR, "参数校验失败", status.HTTP_200_OK)
 
     @app.exception_handler(StarletteHTTPException)

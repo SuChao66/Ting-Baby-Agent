@@ -13,6 +13,8 @@ from app.core.database import init_mongo, close_mongo
 from app.core.exceptions import register_exception_handlers
 from app.core.logger import get_logger, setup_logging
 
+from app.tools.writers.api_client import init_node_api_client, close_node_api_client
+
 # 必须先于其他模块的get_logger使用
 setup_logging()
 logger = get_logger(__name__)
@@ -38,10 +40,14 @@ async def lifespan(app: FastAPI):
     # 启动：建 Motor 客户端（惰性，不联网）
     _ = init_mongo()
     logger.info("汀家 Agent 启动完成 env=%s", settings.app_env)
+    # 启动：建 Node API 客户端（幂等，与 init_mongo 同模式）
+    _ = init_node_api_client()
     yield
     # 关闭：释放连接池
     await close_mongo()
     logger.info("汀家 Agent 已关闭")
+    # 关闭：关 Node API 客户端
+    await close_node_api_client()
 
 app = FastAPI(
     title="Ting Baby Agent",
