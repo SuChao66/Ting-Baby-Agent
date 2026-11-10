@@ -5,9 +5,10 @@ from typing import Any
 from app.core.database import get_db
 from app.crud.common import find_many, normalize_doc, oid
 
+
 # 根据用户 id 查询该用户全部有效宝宝 id
 async def get_baby_ids_for_user(user_id: str) -> list[str]:
-    """ 查 user_baby_relation 得到该用户全部有效宝宝 id（status=1，已移除的除外）。  """
+    """查 user_baby_relation 得到该用户全部有效宝宝 id（status=1，已移除的除外）。"""
 
     relations = await find_many(
         "user_baby_relation",
@@ -16,7 +17,7 @@ async def get_baby_ids_for_user(user_id: str) -> list[str]:
             "status": 1,
         },
         sort_field="createdAt",
-        limit=50  # 一个用户的宝宝数远小于此，给个安全边界
+        limit=50,  # 一个用户的宝宝数远小于此，给个安全边界
     )
 
     baby_ids: list[str] = []
@@ -29,7 +30,7 @@ async def get_baby_ids_for_user(user_id: str) -> list[str]:
 
 # 获取单个宝宝档案
 async def get_baby_profile(baby_id: str) -> dict[str, Any] | None:
-    """ 按 id 查单个宝宝档案 """
+    """按 id 查单个宝宝档案"""
 
     doc = await get_db()["baby"].find_one(
         {

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding:utf-8 -*-
 import time
 from contextlib import asynccontextmanager
 
@@ -9,18 +8,18 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.routes import api_router
 from app.core.config import settings
-from app.core.database import init_mongo, close_mongo
+from app.core.database import close_mongo, init_mongo
 from app.core.exceptions import register_exception_handlers
 from app.core.logger import get_logger, setup_logging
-
-from app.tools.writers.api_client import init_node_api_client, close_node_api_client
+from app.tools.writers.api_client import close_node_api_client, init_node_api_client
 
 # 必须先于其他模块的get_logger使用
 setup_logging()
 logger = get_logger(__name__)
 
-class ReuqestLogMiddleware(BaseHTTPMiddleware):
-    """ 请求日志：只记method/path/status/耗时，不记任何请求头（Authorization 是凭据） """
+
+class RequestLogMiddleware(BaseHTTPMiddleware):
+    """请求日志：只记method/path/status/耗时，不记任何请求头（Authorization 是凭据）"""
 
     async def dispatch(self, request: Request, call_next):
         # 开始时间
@@ -29,8 +28,13 @@ class ReuqestLogMiddleware(BaseHTTPMiddleware):
         # 花费时间
         cost_ms = (time.perf_counter() - start) * 1000
         # 打印日志
-        logger.info("%s %s -> %s (%.1fms)",
-                    request.method, request.url.path, response.status_code, cost_ms)
+        logger.info(
+            "%s %s -> %s (%.1fms)",
+            request.method,
+            request.url.path,
+            response.status_code,
+            cost_ms,
+        )
 
         return response
 
@@ -49,6 +53,7 @@ async def lifespan(app: FastAPI):
     # 关闭：关 Node API 客户端
     await close_node_api_client()
 
+
 app = FastAPI(
     title="Ting Baby Agent",
     description="汀宝宝 AI 对话主入口服务",
@@ -65,10 +70,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # 请求日志（注意：add_middleware 是「后加的在外层」，先加 CORS 再加日志）
-app.add_middleware(ReuqestLogMiddleware)
+app.add_middleware(RequestLogMiddleware)
 # 异常处理器
 register_exception_handlers(app)
 # 路由
 app.include_router(api_router)
-
-

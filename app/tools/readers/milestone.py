@@ -3,8 +3,8 @@ from typing import Any
 
 from app.crud import records as crud_records
 from app.schemas.records import MilestoneOut
-from app.tools.readers import parse_date, resolve_baby_ids
 from app.tools.registry import read_tool
+from app.tools.shared import parse_date, resolve_baby_ids
 
 
 @read_tool("query_milestones")

@@ -4,8 +4,8 @@ from typing import Any
 from app.core.exceptions import NotFoundException
 from app.crud import records as crud_records
 from app.schemas.records import VaccinePlanOut, VaccineRecordOut
-from app.tools.readers import parse_date, resolve_baby_ids
 from app.tools.registry import read_tool
+from app.tools.shared import parse_date, resolve_baby_ids
 
 
 @read_tool("query_vaccine_records")

@@ -1,23 +1,27 @@
 # Author: SuChao
 # Date: 2026-11-06
-# desc: 全项目唯一的配置出口，.env 里定义的变量在此收口为类型安全的 settings 单例。任何模块需要配置，
-# 只需要 from app.core.config import settings，绝不在业务代码里直接 os.environ 或散落读取 .env。
+# desc: 全项目唯一的配置出口，.env 里定义的变量在此收口为类型安全的 settings 单例。
+# 任何模块需要配置，只需要 from app.core.config import settings，
+# 绝不在业务代码里直接 os.environ 或散落读取 .env。
 # app/core/config.py
 
 from typing import ClassVar, Literal
+
 # 应用配置管理
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     """
     全局配置：字段名小写下划线，自动匹配.env中的同名大写变量（大小写不敏感）.
     """
+
     # 运行环境：Local（本地开发）/ prod（生产）
     app_env: Literal["local", "prod"] = "local"
     log_level: str = "INFO"
 
     # 服务器地址
-    mongo_uri: str = "mongodb://localhost:27017/ting-baby-memories" # 本地mongo地址
+    mongo_uri: str = "mongodb://localhost:27017/ting-baby-memories"  # 本地mongo地址
 
     # 与汀宝宝共享的 JWT secret（真实值取自 backend .env 的 jwtSecret）
     jwt_secret: str = "change_me"
@@ -45,10 +49,9 @@ class Settings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore", # 忽略未知字段
+        extra="ignore",  # 忽略未知字段
     )
+
 
 # 模块级单例：import时创建一次，全项目共享
 settings = Settings()
-
-

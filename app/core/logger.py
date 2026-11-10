@@ -1,12 +1,14 @@
 # app/core/logger.py
 import logging
 import sys
+
 from app.core.config import settings
 
 _LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-def setup_logging()-> None:
+
+def setup_logging() -> None:
     """
     初始化根 logger。应用入口 main.py 调用一次即可。
     """
@@ -19,6 +21,7 @@ def setup_logging()-> None:
     handler.setFormatter(logging.Formatter(_LOG_FORMAT, _DATE_FORMAT))
     root.addHandler(handler)
     root.setLevel(settings.log_level.upper())
+
 
 # 获取各模块对应的logger
 def get_logger(name: str) -> logging.Logger:

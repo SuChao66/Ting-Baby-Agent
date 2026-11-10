@@ -1,20 +1,21 @@
 # app/api/routes/tools.py
 # 目标与职责：白名单分发的读工具调试入口，仅 local 环境挂载。
 
-from inspect import signature, Parameter
+from inspect import signature
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends
 
+from app.api.deps import RawTokenDep, get_current_user
+from app.core.exceptions import BizException, NotFoundException
 from app.core.logger import get_logger
-from app.api.deps import get_current_user, RawTokenDep
-from app.core.exceptions import NotFoundException, BizException
 from app.core.security import TokenPayload
 from app.schemas.response import ApiResponse, ok
 from app.tools.registry import READ_TOOLS, WRITE_TOOLS
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools-debug"])
+
 
 @router.get(
     "/read/{tool_name}",
@@ -28,8 +29,8 @@ async def call_read_tool(
     milestone_only: bool = False,
     start: str | None = None,
     end: str | None = None,
-    limit: int | None = None
-)-> ApiResponse[list[dict[str, Any]] | dict[str, Any]]:
+    limit: int | None = None,
+) -> ApiResponse[list[dict[str, Any]] | dict[str, Any]]:
     """白名单分发：只执行 READ_TOOLS 里注册过的工具。
 
     参数按工具函数的实际签名过滤后传入——这正是 M4 AgentScope Toolkit
@@ -39,7 +40,7 @@ async def call_read_tool(
     fn = READ_TOOLS.get(tool_name)
     if fn is None:
         raise NotFoundException(f"找不到名为 {tool_name} 的读工具")
-    
+
     # 候选参数的精确类型：字符串/布尔/整数/None，避免值类型退化为 Any
     candidates: dict[str, str | bool | int | None] = {
         "user_id": user.id,
@@ -73,7 +74,7 @@ async def debug_write_tool(
     user: Annotated[TokenPayload, Depends(get_current_user)],
     token: RawTokenDep,
 ) -> ApiResponse[dict[str, Any]]:
-    """ 写工具冒烟入口：body 为工具参数的 JSON 对象（snake_case），结果包 envelope。 """
+    """写工具冒烟入口：body 为工具参数的 JSON 对象（snake_case），结果包 envelope。"""
     fn = WRITE_TOOLS.get(tool_name)
     if fn is None:
         raise NotFoundException(f"write tool '{tool_name}' not found")

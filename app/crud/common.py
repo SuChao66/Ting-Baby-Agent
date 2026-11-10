@@ -1,38 +1,45 @@
 # app/crud/common.py
-# 目标与职责：crud层公共设施，clamp_limit + find_many 是 limit 硬上限的唯一执行点，全项目谁都绕不过去。
+# 目标与职责：crud层公共设施，clamp_limit + find_many 是 limit 硬上限的唯一执行点，
+# 全项目谁都绕不过去。
 
 from typing import Any
-# 处理 BSON（Binary JSON） 格式的库，BSON 是 MongoDB 使用的二进制文档格式，比 JSON 多了日期、ObjectId、二进制数据、正则、Decimal128 等类型，也更适合高效存储和解析
+
+# 处理 BSON（Binary JSON） 格式的库，BSON 是 MongoDB 使用的二进制文档格式，
+# 比 JSON 多了日期、ObjectId、二进制数据、正则、Decimal128 等类型，也更适合高效存储和解析
 from bson import ObjectId
 
 from app.core.database import get_db
 from app.core.exceptions import BizException
 
-DEFAULT_LIMIT = 20   # 不传 limit 时的默认条数
-MAX_LIMIT = 100      # 硬上限
+DEFAULT_LIMIT = 20  # 不传 limit 时的默认条数
+MAX_LIMIT = 100  # 硬上限
+
 
 # 限制 limit 的值，避免恶意请求。
-def clamp_limit(limit: int | None)-> int:
-    """ 限制 limit 的值，避免恶意请求。把外部传来的 limit 钳制在 [1, MAX_LIMIT]。 """
+def clamp_limit(limit: int | None) -> int:
+    """限制 limit 的值，避免恶意请求。把外部传来的 limit 钳制在 [1, MAX_LIMIT]。"""
 
     if limit is None:
         return DEFAULT_LIMIT
-    
+
     return max(1, min(MAX_LIMIT, limit))
+
 
 # 将字符串转为 ObjectId。
 def oid(value: str) -> ObjectId:
-    """ 把字符串转为 ObjectId。 """
+    """把字符串转为 ObjectId。"""
 
     try:
         return ObjectId(value)
     except Exception as e:
-        #  f-string（格式化字符串）：自动把 {} 里的内容替换成实际值，类似于："无效的 id: " + str(value)
+        #  f-string（格式化字符串）：自动把 {} 里的内容替换成实际值，
+        #  类似于："无效的 id: " + str(value)
         raise BizException(f"无效的 id: {value}") from e
+
 
 # 递归转换 ObjectId -> str。
 def _to_plain(value: Any) -> Any:
-    """ 递归转换 ObjectId -> str。datetime 不用动，Pydantic 原生处理。 """
+    """递归转换 ObjectId -> str。datetime 不用动，Pydantic 原生处理。"""
 
     if isinstance(value, ObjectId):
         return str(value)
@@ -42,7 +49,7 @@ def _to_plain(value: Any) -> Any:
 
     if isinstance(value, list):
         return [_to_plain(item) for item in value]
-    
+
     return value
 
 
@@ -61,8 +68,9 @@ def normalize_doc(doc: dict[str, Any] | None) -> dict[str, Any] | None:
 
     if "_id" in plain:
         plain["id"] = plain.pop("_id")
-    
+
     return plain
+
 
 # 查找
 # coll: 集合名
@@ -83,5 +91,6 @@ async def find_many(
     cursor = get_db()[coll].find(query).sort(sort_field, -1).limit(n)
     docs = await cursor.to_list(length=n)
 
-    # 游标产出的永远是 dict；is not None 只为类型收窄（normalize_doc 的 None 分支服务 find_one 路径）
+    # 游标产出的永远是 dict；is not None 只为类型收窄
+    # （normalize_doc 的 None 分支服务 find_one 路径）
     return [d for doc in docs if (d := normalize_doc(doc)) is not None]  # pyright: ignore[reportAny]

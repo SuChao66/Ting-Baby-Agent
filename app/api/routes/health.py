@@ -17,10 +17,12 @@ logger = get_logger(__name__)
 # 实例化路由
 router = APIRouter(tags=["health"])
 
+
 @router.get("/healthz", response_model=ApiResponse[dict[str, Any]])
 async def healthz() -> ApiResponse[dict[str, Any]]:
-    """ 存活探针：进程活着就200， 不碰外部依赖。 """
+    """存活探针：进程活着就200， 不碰外部依赖。"""
     return ok(data={"status": "ok"})
+
 
 @router.get("/readyz", response_model=ApiResponse[dict[str, Any]])
 async def readyz() -> ApiResponse[dict[str, Any]]:

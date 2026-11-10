@@ -16,6 +16,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+# 格式化器（Black 风格）：与上面 lint 共用 line-length = 100，保存时自动跑
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true

@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from app.core.logger import get_logger
 from app.tools.registry import write_tool
-from app.tools.writers import write_time
+from app.tools.shared import write_time
 from app.tools.writers.api_client import post_write
 
 logger = get_logger(__name__)
@@ -17,6 +17,7 @@ SYMPTOM_RECORD_ADD_PATH = "/api/v1/symptom_record/add"
 # 吃喝拉撒睡接口
 DAILY_RECORD_ADD_PATH = "/api/v1/daily_record/add"
 
+
 @write_tool("add_growth_record")
 async def add_growth_record(
     user_id: str,
@@ -26,7 +27,7 @@ async def add_growth_record(
     height: float,
     weight: float,
     head: float | None = None,
-)-> dict[str, Any]:
+) -> dict[str, Any]:
     """记录宝宝的身高体重测量值。
 
     Args:
@@ -45,22 +46,15 @@ async def add_growth_record(
         "date": write_time(date),
         "height": height,
         "weight": weight,
-        "head": head
+        "head": head,
     }
-    body = await post_write(
-        WEIGHT_HEIGHT_ADD_PATH,
-        token=token,
-        payload=payload
-    )
+    body = await post_write(WEIGHT_HEIGHT_ADD_PATH, token=token, payload=payload)
     # Node 合同：data 是新文档 id 的 24 位 hex 字符串；cast 收窄避开 reportAny
     # 从 body 这个字典里取 "data" 这个键对应的值；如果键不存在，就返回默认值
     record_id = cast(str, body.get("data", ""))
     logger.info("身高体重已写入 user=%s baby=%s date=%s id=%s", user_id, baby_id, date, record_id)
 
-    return {
-        "id": record_id,
-        "message": body.get("message", "新增成功")
-    }
+    return {"id": record_id, "message": body.get("message", "新增成功")}
 
 
 @write_tool("add_health_data")
@@ -82,7 +76,7 @@ async def add_health_data(
     advice: str | None = None,
     content: str | None = None,
     remark: str | None = None,
-)-> dict[str, Any]:
+) -> dict[str, Any]:
     """记录宝宝的医疗护理信息：测量体温、生病症状、用药、就诊、日常护理。
 
     Args:
@@ -127,19 +121,14 @@ async def add_health_data(
         "content": content,
         "remark": remark,
     }
-    body = await post_write(
-        SYMPTOM_RECORD_ADD_PATH, 
-        token=token, 
-        payload=payload
-    )
+    body = await post_write(SYMPTOM_RECORD_ADD_PATH, token=token, payload=payload)
     record_id = cast(str, body.get("data", ""))
 
-    logger.info("症状护理已写入 user=%s baby=%s type=%s id=%s", user_id, baby_id, record_type, record_id)
+    logger.info(
+        "症状护理已写入 user=%s baby=%s type=%s id=%s", user_id, baby_id, record_type, record_id
+    )
 
-    return {
-        "id": record_id, 
-        "message": body.get("message", "新增成功")
-    }
+    return {"id": record_id, "message": body.get("message", "新增成功")}
 
 
 @write_tool("add_daily_care")
@@ -227,10 +216,8 @@ async def add_daily_care(
     body = await post_write(DAILY_RECORD_ADD_PATH, token=token, payload=payload)
     record_id = cast(str, body.get("data", ""))
 
-    logger.info("日常记录已写入 user=%s baby=%s type=%s id=%s", user_id, baby_id, record_type, record_id)
-    
-    return {
-        "id": record_id, 
-        "message": 
-        body.get("message", "新增成功")
-    }
+    logger.info(
+        "日常记录已写入 user=%s baby=%s type=%s id=%s", user_id, baby_id, record_type, record_id
+    )
+
+    return {"id": record_id, "message": body.get("message", "新增成功")}

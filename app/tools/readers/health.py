@@ -3,8 +3,8 @@ from typing import Any
 
 from app.crud import records as crud_records
 from app.schemas.records import SymptomRecordOut
-from app.tools.readers import parse_date, resolve_baby_ids
 from app.tools.registry import read_tool
+from app.tools.shared import parse_date, resolve_baby_ids
 
 
 @read_tool("query_health_data")
@@ -28,7 +28,7 @@ async def query_health_data(
     Returns:
         记录列表
     """
-    
+
     baby_ids = await resolve_baby_ids(user_id, baby_id)
     docs = await crud_records.query_health_data(
         baby_ids, parse_date(start), parse_date(end, end_of_day=True), limit

@@ -16,9 +16,10 @@ _bearer = HTTPBearer(auto_error=False)
 # 既避开 basedpyright「默认值不允许函数调用」的检查，多个路由还能复用同一个别名
 CredDep = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
 
+
 # 解析token，获取用户信息（id， username）
 async def get_current_user(cred: CredDep) -> TokenPayload:
-    """ 校验 JWT，返回用户信息。 """
+    """校验 JWT，返回用户信息。"""
     if cred is None:
         raise UnauthorizedException("请先登录")
     payload = decode_token(cred.credentials)
@@ -27,9 +28,10 @@ async def get_current_user(cred: CredDep) -> TokenPayload:
 
 # 获取原始token，用于写记录
 async def get_raw_token(cred: CredDep) -> str:
-    """ 取原始 JWT 字符串（写工具透传给 Node API 用），与 get_current_user 平行。 """
+    """取原始 JWT 字符串（写工具透传给 Node API 用），与 get_current_user 平行。"""
     if cred is None:
         raise UnauthorizedException("请先登录")
     return cred.credentials
+
 
 RawTokenDep = Annotated[str, Depends(get_raw_token)]
