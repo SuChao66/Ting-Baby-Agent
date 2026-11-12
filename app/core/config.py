@@ -8,6 +8,7 @@
 from typing import ClassVar, Literal
 
 # 应用配置管理
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,8 +27,8 @@ class Settings(BaseSettings):
     # 与汀宝宝共享的 JWT secret（真实值取自 backend .env 的 jwtSecret）
     jwt_secret: str = "change_me"
 
-    # LLM 配置
-    deepseek_api_key: str = "change_me"
+    # LLM 配置（SecretStr：repr/日志不泄漏密钥；agentscope 的 DeepSeekCredential 形参就是它）
+    deepseek_api_key: SecretStr = SecretStr("change_me")
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-flash"
     deepseek_time_out: int = 60000
@@ -40,7 +41,7 @@ class Settings(BaseSettings):
     vision_provider: str = "qwen"
     dashscope_api_key: str = "change_me"
 
-    # Agent 护栏（M4 用）
+    # Agent 护栏（M4 用）,一轮最多6次工具往返，防止LLM陷入一直循环状态
     agent_max_iters: int = 6
 
     # 前端直连 Agent 属跨域；"*" 表示放行全部（仅 local 用）

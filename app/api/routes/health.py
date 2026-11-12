@@ -15,16 +15,16 @@ from app.schemas.response import ApiResponse, ok
 logger = get_logger(__name__)
 
 # 实例化路由
-router = APIRouter(tags=["health"])
+health_router = APIRouter(tags=["health"])
 
 
-@router.get("/healthz", response_model=ApiResponse[dict[str, Any]])
+@health_router.get("/healthz", response_model=ApiResponse[dict[str, Any]])
 async def healthz() -> ApiResponse[dict[str, Any]]:
     """存活探针：进程活着就200， 不碰外部依赖。"""
     return ok(data={"status": "ok"})
 
 
-@router.get("/readyz", response_model=ApiResponse[dict[str, Any]])
+@health_router.get("/readyz", response_model=ApiResponse[dict[str, Any]])
 async def readyz() -> ApiResponse[dict[str, Any]]:
     """就绪探针：ping MongoDB（只读操作）。连不上仍返回 200，
     由 data.mongo 表达状态，方便前端/脚本肉眼判断。"""

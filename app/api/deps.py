@@ -35,3 +35,4 @@ async def get_raw_token(cred: CredDep) -> str:
 
 
 RawTokenDep = Annotated[str, Depends(get_raw_token)]
+UserDep = Annotated[TokenPayload, Depends(get_current_user)]
