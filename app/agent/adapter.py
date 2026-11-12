@@ -5,12 +5,18 @@
 # inspect: 内省函数签名（按签名决定注入哪些身份参数）
 import inspect
 
+# json: 聚合器解析工具入参 / 兜底序列化非字符串结果
+import json
+
 # AsyncIterator: 异步迭代器抽象基类
 from collections.abc import AsyncIterator
 
 # partial: 偏函数, 用来固定函数的一部分参数 / 关键字参数，生成新函数
 from functools import partial
-from typing import Any
+
+# monotonic: 单调时钟计工具耗时（系统校时不影响）
+from time import monotonic
+from typing import Any, NotRequired, TypedDict, cast
 
 from agentscope.agent import Agent, ReActConfig
 from agentscope.credential import DeepSeekCredential
@@ -18,6 +24,10 @@ from agentscope.event import (
     ReplyEndEvent,
     ReplyFinishedReason,
     TextBlockDeltaEvent,
+    ToolCallDeltaEvent,
+    ToolCallEndEvent,
+    ToolCallStartEvent,
+    ToolResultEndEvent,
 )
 from agentscope.message import (
     AssistantMsg,  # pyright: ignore[reportUnknownVariableType]
@@ -60,6 +70,8 @@ _TOOL_PERMISSION = PermissionDecision(
     behavior=PermissionBehavior.ALLOW,
     message="汀宝宝服务端白名单工具，注册即放行",
 )
+# 工具结果展示截断上限（字符）：读工具可能返回几十条记录，防止单帧过大
+TOOL_RESULT_MAX_CHARS = 2000
 
 
 # 注册工具
@@ -204,6 +216,135 @@ def _delta_payload(text: str) -> dict[str, Any]:
     return {"code": 0, "message": "success", "data": {"content": text}}
 
 
+# 工具过程帧：开始执行（入参就绪）
+def _tool_call_payload(tool: str, args: dict[str, Any]) -> dict[str, Any]:
+    """data.event=tool_call：告知前端某工具开始执行、入参是什么。"""
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "event": "tool_call",
+            "tool": tool,
+            "args": args,
+        },
+    }
+
+
+# 工具过程帧：执行完毕（出参就绪）
+def _tool_result_payload(tool: str, state: str, result: str, elapsed_ms: int) -> dict[str, Any]:
+    """data.event=tool_result：工具执行收口，带结果摘要与耗时。"""
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "event": "tool_result",
+            "tool": tool,
+            "state": state,
+            "result": result,
+            "elapsedMs": elapsed_ms,
+        },
+    }
+
+
+# 结果截断
+def _truncate_result(text: str) -> str:
+    """超长结果截断（展示层收敛，不影响 state 里的全量数据）。"""
+
+    if len(text) < TOOL_RESULT_MAX_CHARS:
+        return text
+
+    return text[:TOOL_RESULT_MAX_CHARS] + f"过长已截断，共 {len(text)} 字符"
+
+
+# _PendingCall: 聚合器里单个工具调用的运行时状态（args 在入参聚合完成后才补上）
+class _PendingCall(TypedDict):
+    name: str
+    args_buf: str
+    started: float
+    args: NotRequired[dict[str, Any]]
+
+
+# 工具调用集合器
+class _ToolCallAggregator:
+    """把细粒度工具事件聚合成两帧（tool_call / tool_result）。
+
+    入参在 ToolCallDeltaEvent 里逐段流式给出（Start 无入参），逐 delta 转发
+    是半截 JSON；结果不在 ToolResultEndEvent 里（要回查 state.context）。
+    所有失败路径返回 None 跳过，绝不 raise——最坏丢工具帧，不丢正文流。
+    """
+
+    def __init__(self) -> None:
+        # tool_call_id -> 运行时状态（结构见 _PendingCall）
+        self._pending: dict[str, _PendingCall] = {}
+
+    # 记录开始：工具名 + 起始时刻
+    def on_start(self, evt: ToolCallStartEvent) -> None:
+        self._pending[evt.tool_call_id] = {
+            "name": evt.tool_call_name,
+            "args_buf": "",
+            "started": monotonic(),
+        }
+
+    # 积累入参 JSON 片段
+    def on_delta(self, evt: ToolCallDeltaEvent) -> None:
+        if evt.tool_call_id in self._pending:
+            self._pending[evt.tool_call_id]["args_buf"] += evt.delta
+
+    # 入参聚合结束 -> tool_call帧
+    def on_call_end(self, evt: ToolCallEndEvent) -> dict[str, Any] | None:
+        # 获取当前tool信息
+        info = self._pending.get(evt.tool_call_id)
+        if info is None:
+            return None
+
+        try:
+            loaded = json.loads(info["args_buf"]) if info["args_buf"] else None
+        except json.JSONDecodeError:
+            # 模型生成的参数 JSON 坏/截断：兜空继续，别打断流
+            logger.warning("工具入参 JSON 解析失败 name=%s", info["name"])
+            loaded = None
+
+        # json.loads 实际可能返回 list/str/int：非 dict 一律兜空（库边界返回 Any，cast 显式声明）
+        args: dict[str, Any] = cast(dict[str, Any], loaded) if isinstance(loaded, dict) else {}
+
+        info["args"] = args
+        return _tool_call_payload(info["name"], args)
+
+    # 工具执行完成 -> 回查结果 -> tool_result 帧
+    def on_result_end(self, evt: ToolResultEndEvent, state: AgentState) -> dict[str, Any] | None:
+        info = self._pending.pop(evt.tool_call_id, None)
+        if info is None:
+            return None
+
+        # 执行时间
+        elapsed_ms = int((monotonic() - info["started"]) * 1000)
+        # model_config 用了 use_enum_values 时 state 已是 str，枚举实例时取 .value
+        state_value = getattr(evt.state, "value", evt.state)
+
+        return _tool_result_payload(
+            tool=info["name"],
+            state=str(state_value),
+            result=_truncate_result(self._lookup_result(state, evt.tool_call_id)),
+            elapsed_ms=elapsed_ms,
+        )
+
+    @staticmethod
+    def _lookup_result(state: AgentState, tool_call_id: str) -> str:
+        """倒序扫 context 找 id 匹配的 tool_result block。"""
+
+        for msg in reversed(state.context):
+            for block in msg.get_content_blocks("tool_result"):
+                if block.id == tool_call_id:
+                    output = block.output
+                    if isinstance(output, str):
+                        return output
+                    # 非 str 输出（dict/list）：序列化成 JSON 字符串展示
+                    return json.dumps(output, ensure_ascii=False, default=str)
+        return ""
+
+
 # 流式问答接口
 async def stream_chat(agent: Agent, question: str) -> AsyncIterator[dict[str, Any]]:
     """跑一轮 ReAct 并翻译事件流：产出 SSE 载荷 dict（增量帧/错误帧）。
@@ -212,11 +353,25 @@ async def stream_chat(agent: Agent, question: str) -> AsyncIterator[dict[str, An
     """
 
     try:
+        aggregator = _ToolCallAggregator()
+
         async for evt in agent.reply_stream(inputs=UserMsg(name="user", content=question)):
             if isinstance(evt, TextBlockDeltaEvent):
                 delta: str = evt.delta
                 if delta:
                     yield _delta_payload(delta)
+            elif isinstance(evt, ToolCallStartEvent):
+                aggregator.on_start(evt)
+            elif isinstance(evt, ToolCallDeltaEvent):
+                aggregator.on_delta(evt)
+            elif isinstance(evt, ToolCallEndEvent):
+                payload = aggregator.on_call_end(evt)
+                if payload is not None:
+                    yield payload
+            elif isinstance(evt, ToolResultEndEvent):
+                payload = aggregator.on_result_end(evt, agent.state)
+                if payload is not None:
+                    yield payload
             elif isinstance(evt, ReplyEndEvent):
                 if evt.finished_reason == ReplyFinishedReason.EXCEED_MAX_ITERS:
                     # 护栏超限：给降级文案，正常收尾

@@ -12,6 +12,8 @@ def setup_logging() -> None:
     """
     初始化根 logger。应用入口 main.py 调用一次即可。
     """
+    # 第三方库噪音：pymongo 拓扑/心跳/命令 DEBUG 压到 WARNING（幂等，reload 二次加载也生效）
+    logging.getLogger("pymongo").setLevel(logging.WARNING)
     root = logging.getLogger()
     if root.handlers:
         # 已有handler，当uvicorn --reload 二次加载等场景时，不再重复添加

@@ -4,6 +4,10 @@
 
 # 场景话术：前端 scene 参数 -> 提示词角色微调（M5 的周报流程会扩展 weekly）
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# 业务时区唯一权威：用户/宝宝都在中国，提示词时间基准固定北京时间（不信服务器时区）
+_CN_TZ = ZoneInfo("Asia/Shanghai")
 
 # 静态文案段：基调
 _BASE_TONE = (
@@ -36,8 +40,8 @@ _SCENE_HINTS: dict[str, str] = {
 def build_system_prompt(baby_age: str | None = None, scene: str | None = None) -> str:
     """组装系统提示词：固定基调 + 动态时间/月龄/场景。"""
 
-    # 获取当前本地时间，并生成一个包含时区信息的 ISO 8601 格式时间字符串，精确到秒
-    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    # 当前北京时间（含 +08:00 偏移，模型换算相对时间有明确锚点），精确到秒
+    now = datetime.now(_CN_TZ).isoformat(timespec="seconds")
     parts: list[str] = [
         # 固定基调
         _BASE_TONE,

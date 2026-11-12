@@ -1,12 +1,28 @@
 # app/schemas/records.py
 # 目标与职责：记录类读模型。判别字段用 Literal（Swagger 下拉 + LLM 合同 + 脏数据拦截），
 # 取值超多的选项列表（臭臭颜色 12 选等）放宽为 str，可选值写进注释。
+# 时间字段统一 CnTime：Mongo 存 UTC，模型/用户看北京时间，转述零换算。
 
-from datetime import datetime
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Annotated, Literal
+from zoneinfo import ZoneInfo
 
 # 导入校验
-from pydantic import BaseModel
+from pydantic import BaseModel, PlainSerializer
+
+# 业务时区唯一权威：用户/宝宝都在中国（与 tools/shared.py 同一约定）
+_CN_TZ = ZoneInfo("Asia/Shanghai")
+
+
+# pymongo 默认读出的 naive datetime 值是 UTC 时刻：标 UTC 转北京时间，给「YYYY-MM-DD HH:MM」字符串
+def _to_cn_str(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(_CN_TZ).strftime("%Y-%m-%d %H:%M")
+
+
+# 读模型时间字段类型：序列化统一转北京时间字符串
+CnTime = Annotated[datetime, PlainSerializer(_to_cn_str, return_type=str)]
 
 # 吃喝拉撒睡类型（backend constants.ts DAILY_RECORD_TYPES）
 DailyType = Literal["feed", "sleep", "diaper", "food", "bath", "play", "swim", "other"]
@@ -27,7 +43,7 @@ class GrowthRecordOut(BaseModel):
     height: float  # 身高
     weight: float  # 体重
     head: float | None = None  # 头围
-    date: datetime  # 记录日期
+    date: CnTime  # 记录日期
 
 
 # 症状记录
@@ -37,7 +53,7 @@ class SymptomRecordOut(BaseModel):
     id: str
     babyId: str  # 宝宝 ID
     type: SymptomType  # 记录类型
-    startTime: datetime | None = None  # 开始时间
+    startTime: CnTime | None = None  # 开始时间
     temperature: float | None = None  # 体温 ℃（34-43）
     symptoms: list[str] | None = (
         None  # 症状多选，见 SYMPTOM_OPTIONS（runnyNose/cough/fever 等 24 项）
@@ -61,7 +77,7 @@ class DailyRecordOut(BaseModel):
     id: str
     babyId: str
     type: DailyType
-    startTime: datetime | None = None  # 开始时间
+    startTime: CnTime | None = None  # 开始时间
     duration: float | None = None  # 持续时间（洗睡玩游）
     eventName: str | None = None  # 其他事件名
     foodName: str | None = None  # 辅食
@@ -90,7 +106,7 @@ class VaccineRecordOut(BaseModel):
     vaccineName: str  # 疫苗名称
     dose: int | None = None  # 第几剂
     doseKey: str | None = None  # 剂次标识（如 hepb-1，自由补录为空）
-    injectDate: datetime  # 注射日期
+    injectDate: CnTime  # 注射日期
     hospital: str | None = None
     batchNo: str | None = None
     fee: float | None = None
@@ -127,7 +143,7 @@ class MilestoneOut(BaseModel):
     babyId: str
     content: str
     isMilestone: bool | None = None  # 是否里程碑事件
-    publishTime: datetime
+    publishTime: CnTime
     tags: list[str] | None = None
     files: list[TimelineFile] | None = None
     visibleRoles: VisibleRole | None = None
