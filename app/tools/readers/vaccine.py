@@ -36,15 +36,15 @@ async def query_vaccine_records(
 
 @read_tool("get_vaccine_plan")
 async def get_vaccine_plan(user_id: str, baby_id: str | None = None) -> dict[str, Any]:
-    """查询宝宝的疫苗接种计划（已加入计划的自费疫苗剂次 key 列表）。
-
-    key 的中文名对照在前端疫苗模板里，本工具只透出原始 key（如 hepb-1）。
+    """查询宝宝的疫苗接种计划：已加入计划的自费疫苗剂次 key 列表。
 
     Args:
         user_id: 用户 id（服务端从 JWT 注入）
         baby_id: 可选，宝宝 id；缺省取第一个宝宝
     Returns:
-        { id, babyId, keys }
+        { id, babyId, keys }，keys 是剂次标识（如 hepb-1）；
+        本工具只返回 key，不含中文名。回答"该打什么疫苗"时，
+        已在 keys 里的剂次说明已纳入计划，无需重复建议。
     """
     baby_ids = await resolve_baby_ids(user_id, baby_id)
     if not baby_ids:

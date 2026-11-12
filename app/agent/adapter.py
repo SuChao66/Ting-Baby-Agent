@@ -19,8 +19,16 @@ from agentscope.event import (
     ReplyFinishedReason,
     TextBlockDeltaEvent,
 )
-from agentscope.message import AssistantMsg, TextBlock, UserMsg  # pyright: ignore[reportUnknownVariableType]
+from agentscope.message import (
+    AssistantMsg,  # pyright: ignore[reportUnknownVariableType]
+    TextBlock,
+    ToolCallState,
+    ToolResultBlock,
+    ToolResultState,
+    UserMsg,  # pyright: ignore[reportUnknownVariableType]
+)
 from agentscope.model import DeepSeekChatModel
+from agentscope.permission import PermissionBehavior, PermissionDecision
 from agentscope.state import AgentState
 from agentscope.tool import FunctionTool, ToolBase, Toolkit
 
@@ -40,6 +48,19 @@ FALLBACK_TEXT = "这个问题有点绕，我捋一下思路，请换个问法再
 # Agent error文案
 ERROR_TEXT = "汀宝宝大脑开小差了，请稍后再试"
 
+# Agent 名字：写入 context 消息的 name，恢复会话时按它识别自家消息
+AGENT_NAME = "汀宝宝助手"
+
+# 工具权限决策：AgentScope 的 FunctionTool 默认 check_permissions 返回 ASK
+# （等外部 UserConfirmResultEvent 人工确认），SSE 服务端没有确认回路，
+# 工具调用会永久挂在 asking 状态不执行——必须显式放行。
+# 白名单注册即信任（越权防线在工具内 resolve_baby_ids + writers 出口），放行到此为止；
+# 写操作的确认规范由系统提示词在对话层负责（复述 -> 用户确认 -> 才调写工具）。
+_TOOL_PERMISSION = PermissionDecision(
+    behavior=PermissionBehavior.ALLOW,
+    message="汀宝宝服务端白名单工具，注册即放行",
+)
+
 
 # 注册工具
 def _build_toolkit(user_id: str, token: str) -> Toolkit:
@@ -48,7 +69,8 @@ def _build_toolkit(user_id: str, token: str) -> Toolkit:
     # list 是不变容器：list[FunctionTool] 塞不进形参 list[ToolBase]，
     # 先声明 list[ToolBase] 再逐个 append（Toolkit.add_tool 是 async 的，同步函数里用不了）
     tools: list[ToolBase] = []
-    for name, fn in ALL_TOOLS.items():
+
+    def _wrap(name: str, fn: ToolFunc, *, read_only: bool) -> None:
         # 位置绑定注入身份：positional 绑定的参数会从签名移除（schema 干净），
         # keyword 绑定只会挂默认值、参数残留进 LLM schema。
         # 约定 user_id 恒为第一形参，writers 的 token 恒为第二，校验防新增工具排错位
@@ -58,7 +80,20 @@ def _build_toolkit(user_id: str, token: str) -> Toolkit:
         if "token" in params and params[1] != "token":
             raise ValueError(f"工具 {name} 第二形参必须是 token，实际是 {params[1]}")
         bound: tuple[str, ...] = (user_id, token) if "token" in params else (user_id,)
-        tools.append(FunctionTool(func=partial(fn, *bound), name=name))
+        # is_read_only：读工具并发安全，调度器可并行执行多个读调用
+        tools.append(
+            FunctionTool(
+                func=partial(fn, *bound),
+                name=name,
+                is_read_only=read_only,
+                permission=_TOOL_PERMISSION,
+            )
+        )
+
+    for name, fn in READ_TOOLS.items():
+        _wrap(name, fn, read_only=True)
+    for name, fn in WRITE_TOOLS.items():
+        _wrap(name, fn, read_only=False)
 
     return Toolkit(tools=tools)
 
@@ -93,6 +128,37 @@ def _seed_context(history: list[dict[str, str]]) -> list[Any]:
     return msgs
 
 
+# 修复旧会话悬空工具调用
+def _heal_awaiting_tool_calls(state: AgentState, agent_name: str) -> None:
+    """给恢复会话尾部悬空的工具调用补收尾结果。
+
+    历史会话可能因断流/权限挂起留下没有 tool_result 的 tool_call——
+    AgentScope 恢复后检测到 awaiting 调用会直接拒绝续聊（要求先喂确认事件），
+    直接发给模型也会违反「tool_call 后必有 tool_result」的消息序列。
+    这里原地补一条 INTERRUPTED 结果：序列合法化，模型也知道该调用没执行。
+    """
+
+    if not state.context:
+        return
+    last = state.context[-1]
+    if last.role != "assistant" or last.name != agent_name:
+        return
+
+    result_ids = {b.id for b in last.get_content_blocks("tool_result")}
+    for call in last.get_content_blocks("tool_call"):
+        if call.id in result_ids:
+            continue
+        call.state = ToolCallState.FINISHED
+        last.content.append(
+            ToolResultBlock(
+                id=call.id,  # formatter 以此回填 tool_call_id
+                name=call.name,
+                output="该工具调用因会话中断未执行，结果未知；如用户问及相关数据请重新调用工具查询。",
+                state=ToolResultState.INTERRUPTED,
+            )
+        )
+
+
 # 创建agent
 async def create_agent(
     user_id: str,
@@ -108,11 +174,12 @@ async def create_agent(
     saved = await load_session_state(session_code)
     if saved is not None:
         state = AgentState.model_validate(saved)  # 老会话：整存整取恢复
+        _heal_awaiting_tool_calls(state, agent_name=AGENT_NAME)
     else:
         state = AgentState(session_id=session_code, context=_seed_context(history or []))
 
     _agent = Agent(
-        name="汀宝宝助手",
+        name=AGENT_NAME,
         system_prompt=build_system_prompt(baby_age=baby_age, scene=scene),
         model=_build_model(),
         toolkit=_build_toolkit(user_id=user_id, token=token),

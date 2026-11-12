@@ -2,10 +2,8 @@
 # 目标与职责：AI 对话端点——POST /api/v1/ai/chat/stream（SSE，对齐前端现有路径）
 
 import json
-from typing import Annotated, Any, ClassVar
-from venv import create
+from typing import Any, ClassVar
 
-from agentscope.agent import Agent
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -45,7 +43,7 @@ def _sse_frame(payload: dict[str, Any]) -> str:
 
 
 # 流式问答接口
-@agent_router.post("/api/v1/ai/chat/stream", summary="AI 对话流式")
+@agent_router.post("/api-ai/v1/ai/chat/stream", summary="AI 对话流式")
 async def chat_stream(body: AIChatIn, user: UserDep, token: RawTokenDep) -> StreamingResponse:
     """流式问答：事件翻译后的载荷 dict -> SSE 帧，结束发 [DONE]。"""
 
@@ -77,7 +75,7 @@ async def chat_stream(body: AIChatIn, user: UserDep, token: RawTokenDep) -> Stre
 
 # 非流式问答
 @agent_router.post(
-    "/api/v1/ai/chat", response_model=ApiResponse[dict[str, Any]], summary="AI 对话非流式"
+    "/api-ai/v1/ai/chat", response_model=ApiResponse[dict[str, Any]], summary="AI 对话非流式"
 )
 async def chat(body: AIChatIn, user: UserDep, token: RawTokenDep) -> ApiResponse[dict[str, Any]]:
     """非流式问答：同一 adapter 核心，聚合文本返回 {answer}。"""

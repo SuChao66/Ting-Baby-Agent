@@ -2,7 +2,7 @@
 from typing import Any
 
 from app.crud import records as crud_records
-from app.schemas.records import DailyRecordOut
+from app.schemas.records import DailyRecordOut, DailyType
 from app.tools.registry import read_tool
 from app.tools.shared import parse_date, resolve_baby_ids
 
@@ -11,7 +11,7 @@ from app.tools.shared import parse_date, resolve_baby_ids
 async def query_daily_care(
     user_id: str,
     baby_id: str | None = None,
-    record_type: str | None = None,
+    record_type: DailyType | None = None,
     start: str | None = None,
     end: str | None = None,
     limit: int | None = None,
@@ -21,7 +21,8 @@ async def query_daily_care(
     Args:
         user_id: 用户 id（服务端从 JWT 注入）
         baby_id: 可选，指定宝宝；缺省查该用户全部宝宝
-        record_type: 可选，记录类型过滤：feed/sleep/diaper/food/bath/play/swim/other
+        record_type: 可选，按类型过滤（枚举）：feed(喂奶)/sleep(睡觉)/diaper(换尿布)/
+            food(辅食)/bath(洗澡)/play(玩耍)/swim(游泳)/other(其他)
         start: 可选，开始日期 YYYY-MM-DD（含当天）
         end: 可选，结束日期 YYYY-MM-DD（含当天）
         limit: 可选，最多返回条数，默认 20，上限 100
