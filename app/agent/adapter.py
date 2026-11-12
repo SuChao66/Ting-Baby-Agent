@@ -16,7 +16,7 @@ from functools import partial
 
 # monotonic: 单调时钟计工具耗时（系统校时不影响）
 from time import monotonic
-from typing import Any, NotRequired, TypedDict, cast
+from typing import Any, Literal, NotRequired, TypedDict, cast
 
 from agentscope.agent import Agent, ReActConfig
 from agentscope.credential import DeepSeekCredential
@@ -46,6 +46,7 @@ from app.agent.prompts import build_system_prompt
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.crud.agent_session import load_session_state, save_session_state
+from app.crud.ai_record import save_aiRecord
 from app.tools.registry import READ_TOOLS, WRITE_TOOLS, ToolFunc
 
 logger = get_logger(__name__)
@@ -346,11 +347,35 @@ class _ToolCallAggregator:
 
 
 # 流式问答接口
-async def stream_chat(agent: Agent, question: str) -> AsyncIterator[dict[str, Any]]:
+async def stream_chat(
+    agent: Agent, question: str, *, user_id: str, req_id: str
+) -> AsyncIterator[dict[str, Any]]:
     """跑一轮 ReAct 并翻译事件流：产出 SSE 载荷 dict（增量帧/错误帧）。
 
     职责边界：本函数结束前把 agent.state 持久化；SSE 帧封装（data: 前缀、[DONE]）在路由层。
     """
+
+    # 回答全文聚合（落库用）；status 对齐 Node 合同：1 成功 / 0 失败
+    answer = ""
+    status: Literal[1, 0] = 1
+
+    # 旁路落库：失败只记日志，绝不干扰 SSE 收尾（对齐 Node saveRecord 的 .catch 语义）。
+    # 闭包读 answer/status：调用时刻的最新值，三处收尾共用一份旁路逻辑。
+    async def _persist_record() -> None:
+        try:
+            saved = await save_aiRecord(
+                user_id=user_id,
+                session_code=agent.state.session_id,
+                req_id=req_id,
+                question=question,
+                answer=answer,
+                status=status,
+            )
+        except Exception:
+            logger.exception("AI 问答记录落库失败 reqId=%s", req_id)
+        else:
+            if not saved:
+                logger.info("AI 问答记录 reqId 重复，幂等跳过 reqId=%s", req_id)
 
     try:
         aggregator = _ToolCallAggregator()
@@ -359,6 +384,8 @@ async def stream_chat(agent: Agent, question: str) -> AsyncIterator[dict[str, An
             if isinstance(evt, TextBlockDeltaEvent):
                 delta: str = evt.delta
                 if delta:
+                    # 同步聚合全文（落库用）
+                    answer += delta
                     yield _delta_payload(delta)
             elif isinstance(evt, ToolCallStartEvent):
                 aggregator.on_start(evt)
@@ -389,17 +416,43 @@ async def stream_chat(agent: Agent, question: str) -> AsyncIterator[dict[str, An
             agent.state.session_id,
             agent.state.model_dump(mode="json"),
         )
+        # 写记录进库
+        await _persist_record()
     except Exception:
         # 模型断流/网络异常等：兜成业务错误帧，不让 SSE 以 500 堆栈断掉
         logger.exception("Agent 回复异常 session=%s", agent.state.session_id)
+
+        status = 0
+        if not answer:
+            answer = ERROR_TEXT
+
         yield _error_payload(ERROR_TEXT)
+        await _persist_record()
 
 
 # 非流式问答
-async def chat_once(agent: Agent, question: str) -> str:
+async def chat_once(agent: Agent, question: str, *, user_id: str, req_id: str) -> str:
     """非流式：复用同一事件流，聚合全部文本（POST /api/v1/ai/chat 的 answer）。"""
 
     text: str = ""
+    status: Literal[1, 0] = 1
+
+    async def _persist_record() -> None:
+        # 旁路落库：与 stream_chat 同语义，失败只记日志
+        try:
+            saved = await save_aiRecord(
+                user_id=user_id,
+                session_code=agent.state.session_id,
+                req_id=req_id,
+                question=question,
+                answer=text,
+                status=status,
+            )
+        except Exception:
+            logger.exception("AI 问答记录落库失败 reqId=%s", req_id)
+        else:
+            if not saved:
+                logger.info("AI 问答记录 reqId 重复，幂等跳过 reqId=%s", req_id)
 
     try:
         async for evt in agent.reply_stream(inputs=UserMsg(name="user", content=question)):
@@ -411,15 +464,19 @@ async def chat_once(agent: Agent, question: str) -> str:
                 elif evt.finished_reason == ReplyFinishedReason.ERROR:
                     # 服务端错误：与 stream_chat 同语义，raise 交给全局异常处理器转错误 envelope
                     logger.error("ReAct 错误 session=%s", agent.state.session_id)
+                    status = 0
                     raise RuntimeError(ERROR_TEXT)
         # 正常收尾：全量持久化（含本轮用户消息 + 回复 + 工具痕迹）
         await save_session_state(
             agent.state.session_id,
             agent.state.model_dump(mode="json"),
         )
+        await _persist_record()
     except Exception:
         # 模型断流/网络异常等：兜成业务错误帧，不让 SSE 以 500 堆栈断掉
         logger.exception("Agent 回复异常 session=%s", agent.state.session_id)
+        status = 0
+        await _persist_record()
         raise
 
     return text

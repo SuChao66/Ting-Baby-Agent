@@ -58,7 +58,7 @@ async def chat_stream(body: AIChatIn, user: UserDep, token: RawTokenDep) -> Stre
 
     # 生成器
     async def gen():
-        async for payload in stream_chat(agent, body.question):
+        async for payload in stream_chat(agent, body.question, user_id=user.id, req_id=body.req_id):
             # 发送流式帧
             yield _sse_frame(payload)
         # 发送结束帧
@@ -89,6 +89,11 @@ async def chat(body: AIChatIn, user: UserDep, token: RawTokenDep) -> ApiResponse
         history=body.history,
     )
 
-    answer: str = await chat_once(agent, body.question)
+    answer: str = await chat_once(
+        agent,
+        body.question,
+        user_id=user.id,
+        req_id=body.req_id,
+    )
 
     return ApiResponse(data={"answer": answer})
