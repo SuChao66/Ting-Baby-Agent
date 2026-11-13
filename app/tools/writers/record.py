@@ -114,7 +114,7 @@ async def add_growth_record(
         head: 头围，厘米，大于 0，可选。
     """
 
-    # 组装paload
+    # 组装 payload
     payload: dict[str, Any] = {
         "babyId": baby_id,
         "date": write_time(date),
@@ -272,9 +272,9 @@ async def add_daily_care(
         left_duration: 亲喂左侧时长，分钟，type=feed 亲喂计时时填。
         right_duration: 亲喂右侧时长，分钟，type=feed 亲喂计时时填。
         last_used_side: 本次最后喂的一侧，type=feed 亲喂时可选：left/right。
-        estimated_amount: 母乳瓶喂估算量，毫升，type=feed 瓶喂母乳时填。
+        estimated_amount: 母乳亲喂估算量，毫升，type=feed 亲喂母乳时填。
         formula_amount: 奶粉量，毫升，type=feed 喂奶粉或混合喂养时填。
-        breast_milk_amount: 母乳量，毫升，type=feed 混合喂养时填。
+        breast_milk_amount: 母乳量，毫升，type=feed 瓶喂时填。
         remark: 备注说明，可选，最多 200 字。
     """
     payload: dict[str, Any] = {
