@@ -32,9 +32,23 @@ pip install -r requirements.txt   # 待 M1 执行
 cp .env.example .env              # 填写真实值
 ```
 
+## VPS 部署（并入主 docker-compose 编排）
+
+Agent 作为第三个 service（`agent`）进汀宝宝仓库根目录的 `docker-compose.yml`：
+
+```bash
+cd /path/to/汀宝宝
+cp Ting-Baby-Agent/.env.example .env.agent   # 放仓库根目录，填写真实值
+docker compose up -d --build agent
+```
+
+- 前端 nginx 已反代 `/api-ai -> host.docker.internal:8000`，前端与 Node 零改动
+- `NODE_API_BASE_URL=http://backend:3000`（compose 网络内直连，backend 无需暴露端口）
+- 验证：`curl http://127.0.0.1:8000/healthz`，`/readyz` 看 Mongo 连通
+
 ## 红线
 
 1. 不改动汀宝宝 backend/frontend 任何现有代码
 2. MongoDB 读 = 只读账号直连；写 = 必经汀宝宝 Node REST API
 3. 会话记录写自有 collection，不动汀宝宝 `AIRecord`
-4. 独立 docker-compose，不并入汀宝宝现有编排
+4. Agent 以独立 service 并入汀宝宝主 docker-compose 编排（agent），前端与 Node 代码零改动

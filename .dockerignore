@@ -1,0 +1,18 @@
+# 本地开发产物与无关文件，不进构建上下文
+.venv
+.git
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# 密钥与本地配置（运行时配置由 compose env_file 注入）
+.env
+.env.*
+
+# 非运行时目录
+tests
+docs
+scripts
